@@ -5,10 +5,6 @@ import torch.nn as nn
 from tqdm import tqdm
 from torch.utils.data import DataLoader, TensorDataset
 from models.pointnet2_cls import pointnet2_cls_ssg, pointnet2_cls_msg
-from models.pointnet2_seg import pointnet2_seg_ssg
-from data.ModelNet40 import ModelNet40
-from data.ShapeNet import ShapeNet
-from utils.IoU import cal_accuracy_iou
 from data.provider import pc_normalize
 import os
 
