@@ -1,3 +1,4 @@
+import os
 import sys
 import torch
 from torch import optim
@@ -7,10 +8,12 @@ from torch._C import device
 from torch.utils.data import DataLoader, TensorDataset
 from generator import load_generator
 from assessor import load_assessor
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 
 # np.set_printoptions(threshold=10)
-def walk(z, G_path, Cls_path, iteration=1000, delta=0.01):
-    print('input z:', z)
+def walk(z, G_path, Cls_path, iterations=1000, delta=0.1):
+    #print('input z:', z)
     G = load_generator(G_path)
     Cls = load_assessor(Cls_path)
     m = nn.Softmax(dim=1)
@@ -30,33 +33,47 @@ def walk(z, G_path, Cls_path, iteration=1000, delta=0.01):
         # print(voxels.shape)
         points = convert(voxels)
         # print(points.shape)
+        
         out_score = classify(points, Cls, m)
           #print(out_score)
         return out_score
 
-    for iteration in range(1000):
+    ct = 0
+    while True:
+        torch.seed()
+        z = torch.randn(1, 200).to(torch.device('cuda'))
+        out_score = f(z).detach().to('cpu').numpy()
+        print(out_score)
         
-        prevy = f(z).detach().to('cpu').numpy()
-        print('current score:', prevy)
+        if out_score > 0.95:
+            visualize(ct, z, G)
+            ct += 1
+    return
 
-        mx = 0.
-        transform = -1
-        for dim in range(z.shape[1]):
-            newz = torch.clone(z)
-            newz[0,dim] += delta
-            newy = f(newz).detach().to('cpu').numpy()
-            if newy-prevy > mx:
-              print(newy)
-              mx = newy-prevy
-              transform = dim
-        if newy < treshold and transform != -1:
-            z[0,transform] += delta
-            print("iteration {} z: {}".format(iteration, z))
-        else:
-            break
+    # for iteration in range(iterations):
+        
+    #     prevy = f(z).detach().to('cpu').numpy()
+    #     print('current score:', prevy)
+    #     visualize(iteration, z, G)
+
+    #     mx = 0.
+    #     transform = -1
+    #     for dim in range(z.shape[1]):
+    #         newz = torch.clone(z)
+    #         newz[0,dim] += delta
+    #         newy = f(newz).detach().to('cpu').numpy()
+    #         if newy-prevy > mx:
+    #             #print(newy)
+    #             mx = newy-prevy
+    #             transform = dim
+    #     if newy < treshold and transform != -1:
+    #         z[0,transform] += delta
+    #         print("iteration {} z: {}".format(iteration, z))
+            
+    #     else:
+    #         break
     print('output z:', z)
     print('output score:', f(z).detach().to('cpu').numpy())
-
 
 def process(z, G_path, Cls_path, iterations=1000, lr=0.1):
 
@@ -103,7 +120,29 @@ def process(z, G_path, Cls_path, iterations=1000, lr=0.1):
 
     print("iteration:{}".format(iteration))
     print("out:{}".format(z))
+    
 
+def interpolate(source, target, G, segs=100):
+    diff = target - source
+    for i in range(segs):
+        visualize(i, source + (i/segs)*diff, G)
+    
+
+def visualize(index, z, G):
+    voxels = generator(z, G).to('cpu').numpy()
+    
+    fig = plt.figure(figsize=(16,16))
+    x, y, z = voxels.nonzero()
+    ax = fig.gca(projection="3d")
+    ax.axes.set_xlim3d(left=0.2, right=63.8) 
+    ax.axes.set_ylim3d(bottom=0.2, top=63.8) 
+    ax.axes.set_zlim3d(bottom=0.2, top=63.8) 
+    ax.scatter(x, y, z, zdir='z', c='red')
+    # os.system('mkdir visualize')
+    plt.savefig('visualize/{}.png'.format(index), bbox_inches='tight')
+    plt.close()
+
+    
 
 # setup the generator, mapping z -> voxels
 def generator(z, G):
@@ -142,10 +181,12 @@ def classify(xyz_points, model, m, npoints=1024):
     points = torch.zeros_like(data) # do not use normals
     
     with torch.no_grad():
+
         torch.manual_seed(0)
         pred = model(data, points).detach()
+        # print(torch.argmax(pred))
         pred = m(pred)
-        print(pred[0,26])
+        # print('pred:', pred[0,26])
         
     return pred[0,26]
     
@@ -155,8 +196,7 @@ def main():
     G_path = 'G.pth' #args[0]
     Cls_path = 'Cls.pth' #args[1]
     z_dim = 200
-    z = torch.rand(1, z_dim)
-    
+    z = torch.randn(1, z_dim)
     #process(z, G_path, Cls_path)
     walk(z, G_path, Cls_path)
 
